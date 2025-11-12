@@ -1,22 +1,40 @@
 #include "../headers/CPU.h"
 #include "../headers/Display.h"
-#include "../headers/Keypad.h"
+#include "../headers/KeypadAdapter.h"
 #include "../headers/Memory.h"
 #include "../headers/Platform.h"
 #include "../headers/ROMLoader.h"
+
 #include <Arduino.h>
+#include <Keypad.h>
 #include <cstring>
 
 // Pines para el display TFT, usar los pines de SPI por defecto de la placa
 #define TFT_CS 10
-#define TFT_DC 6
-#define TFT_RST 7
+#define TFT_DC 4
+#define TFT_RST 5
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+// -----------------------
+#define ROWS 4
+#define COLS 4
+
+char keys[ROWS][COLS] = {
+    {0x1, 0x2, 0x3, 0xC},
+    {0x4, 0x5, 0x6, 0xD},
+    {0x7, 0x8, 0x9, 0xE},
+    {0xA, 0x0, 0xB, 0xF}};
+
+byte rowPins[ROWS] = {18, 17, 2, 41};
+byte colPins[COLS] = {6, 7, 15, 1};
+
+Keypad kpd = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// -----------------------
 
 Memory memory;
 Display display;
-Keypad keypad;
+KeypadAdapter keypad;
 Platform platform(tft);
 CPU cpu(memory, display, keypad);
 ROMLoader romLoader;
@@ -80,9 +98,6 @@ int selectROMSerial() {
 
 void setup() {
 
-	pinMode(38, OUTPUT);
-	digitalWrite(38, LOW);
-
 	Serial.begin(115200);
 
 	platform.init();
@@ -122,5 +137,24 @@ void loop() {
 		cpu.updateTimers();
 		platform.UpdateScreen(display.getBuffer());
 		ch8timersTick = false;
+	}
+
+	if (kpd.getKeys()) {
+		for (int i = 0; i < LIST_MAX; i++) // Scan the whole key list.
+		{
+			if (kpd.key[i].stateChanged) // Only find keys that have changed state.
+			{
+				switch (kpd.key[i].kstate) { // Report active key state : IDLE, PRESSED, HOLD, or RELEASED
+					case PRESSED:
+					case HOLD:
+						keypad.setKey(kpd.key[i].kchar, true);
+						break;
+					case RELEASED:
+					case IDLE:
+						keypad.setKey(kpd.key[i].kchar, false);
+						break;
+				}
+			}
+		}
 	}
 }

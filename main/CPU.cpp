@@ -1,12 +1,12 @@
 #include "../headers/CPU.h"
 
+#include <Arduino.h>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
-#include <Arduino.h>
 
-CPU::CPU(Memory &memory, Display &display, Keypad &keypad)
+CPU::CPU(Memory &memory, Display &display, KeypadAdapter &keypad)
     : RAM(memory), display(display), keypad(keypad) {
 	init();
 }
@@ -189,13 +189,13 @@ void CPU::decodeExecuteInstruction() {
 					uint8_t px = (Vx + col) % display.getWidth();  // wrap horizontal
 					uint8_t py = (Vy + row) % display.getHeight(); // wrap vertical
 
-					if (display.getPixel(px, py) == 1){
+					if (display.getPixel(px, py) == 1) {
 						regV[0xF] = 1; // colisión
 					}
 
-					if(display.getPixel(px,py) == 1){
+					if (display.getPixel(px, py) == 1) {
 						display.setPixel(px, py, 0);
-					}else{
+					} else {
 						display.setPixel(px, py, 1);
 					}
 				}

@@ -1,13 +1,13 @@
-#ifndef KEYPAD_H
-#define KEYPAD_H
+#ifndef KEYPADADAPTER_H
+#define KEYPADADAPTER_H
 #include <cstdint>
 
 #define NUM_KEYS 16
 
-class Keypad {
+class KeypadAdapter {
   public:
-	Keypad();
-	~Keypad();
+	KeypadAdapter();
+	~KeypadAdapter();
 
 	void setKey(uint8_t key, bool pressed);
 	bool isKeyPressed(uint8_t key);

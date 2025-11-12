@@ -1,14 +1,14 @@
 #ifndef CPU_H
 #define CPU_h
 #include "Display.h"
-#include "Keypad.h"
+#include "KeypadAdapter.h"
 #include "Memory.h"
 #include <cstdint>
 
 class CPU {
 
   public:
-	CPU(Memory &, Display &, Keypad &);
+	CPU(Memory &, Display &, KeypadAdapter &);
 	~CPU();
 
 	void init();
@@ -29,7 +29,7 @@ class CPU {
 	uint16_t instruction;
 	Memory &RAM;
 	Display &display;
-	Keypad &keypad;
+	KeypadAdapter &keypad;
 };
 
 #endif
