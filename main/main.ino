@@ -1,150 +1,175 @@
-#include "../headers/CPU.h"
-#include "../headers/Display.h"
-#include "../headers/KeypadAdapter.h"
-#include "../headers/Memory.h"
-#include "../headers/Platform.h"
-#include "../headers/ROMLoader.h"
+#include "headers/CPU.h"
+#include "headers/Display.h"
+#include "headers/KeypadAdapter.h"
+#include "headers/Memory.h"
+#include "headers/Platform.h"
+#include "headers/ROMLoader.h"
 
 #include <Arduino.h>
 #include <Keypad.h>
 #include <cstring>
 
 // Pines para el display TFT, usar los pines de SPI por defecto de la placa
-#define TFT_CS 10
-#define TFT_DC 4
-#define TFT_RST 5
+#define TFT_CS 46
+#define TFT_DC 9
+#define TFT_RST 10
 
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
-// -----------------------
+////////////////////////////////////////////////////////////////////////////
+
+// Definiciones de teclas y pines keypad
 #define ROWS 4
 #define COLS 4
 
 char keys[ROWS][COLS] = {
-    {0x1, 0x2, 0x3, 0xC},
-    {0x4, 0x5, 0x6, 0xD},
-    {0x7, 0x8, 0x9, 0xE},
-    {0xA, 0x0, 0xB, 0xF}};
+    {0xA, 0x7, 0x4, 0x1},
+    {0x0, 0x8, 0x5, 0x2},
+    {0xB, 0x9, 0x6, 0x3},
+    {0xF, 0xE, 0xD, 0xC}};
 
-byte rowPins[ROWS] = {18, 17, 2, 41};
-byte colPins[COLS] = {6, 7, 15, 1};
+uint8_t rowPins[ROWS] = {15, 16, 17, 18};
+uint8_t colPins[COLS] = {4, 5, 6, 7};
 
+////////////////////////////////////////////////////////////////////////////
+
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 Keypad kpd = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
-
-// -----------------------
 
 Memory memory;
 Display display;
 KeypadAdapter keypad;
 Platform platform(tft);
-CPU cpu(memory, display, keypad);
+CPU chip8(memory, display, keypad);
 ROMLoader romLoader;
-int address = 0x200;
 
-hw_timer_t *CPUFreq = NULL;
-hw_timer_t *CH8TimersFreq = NULL;
+hw_timer_t *chip8ClockTimer = NULL;
+hw_timer_t *chip8DelaySoundTimer = NULL;
+hw_timer_t *keypadScanTimer = NULL;
+hw_timer_t *keypadDebounceTimer = NULL;
 
-bool cpuTick = false;
-bool ch8timersTick = false;
+volatile bool updateTFTScreenFlag = false;
+volatile bool chip8ClockCycleFlag = false;
+volatile bool scanKeypadFlag = false;
+volatile bool debouncerFlag = true;
 
-void IRAM_ATTR CPUCycle() {
-	cpuTick = true;
-}
+volatile bool romSelected = false; 
+volatile int highlightIndex = 0;   // Me chirrian ambas cosas
+volatile bool chip8running = false;
 
-void IRAM_ATTR CPUTimers() {
-	ch8timersTick = true;
-}
+void inicializarCHIP8Timers();
+void inicializarKeypadTimers();
 
-void drawROMMenuTFT(int highlightIndex) {
-	tft.fillScreen(ST77XX_BLACK); // limpiar pantalla
+void IRAM_ATTR CHIP8ClockCycle();
+void IRAM_ATTR CHIP8UpdateTimers();
+void IRAM_ATTR keypadScanInterrupt();
 
-	tft.setTextSize(2); // ajusta según quieras que se vea grande/pequeño
-	tft.setTextColor(ST77XX_YELLOW);
-	tft.setCursor(0, 0);
+void scanKeypad();
+void drawROMMenuTFT(int);
+void selectROM();
 
-	for (int i = 0; i < romLoader.romCount; i++) {
-		if (i == highlightIndex) {
-			tft.setTextColor(ST77XX_RED); // ROM seleccionada
-		} else {
-			tft.setTextColor(ST77XX_YELLOW);
-		}
-		tft.printf("%d-%s\n", i, romLoader.roms[i].c_str());
-	}
-}
-
-int selectROMSerial() {
-	int selected = 0;
-	drawROMMenuTFT(selected);
-
-	Serial.println("Selecciona el número de ROM:");
-
-	for (int i = 0; i < romLoader.romCount; i++)
-		Serial.printf("%d: %s\n", i, romLoader.roms[i].c_str());
-
-	while (true) {
-		if (Serial.available()) {
-			int choice = Serial.parseInt();
-			if (choice >= 0 && choice < romLoader.romCount) {
-				selected = choice;
-				drawROMMenuTFT(selected); // actualizar TFT
-				Serial.printf("Seleccionaste: %s\n", romLoader.roms[selected].c_str());
-				tft.fillScreen(ST77XX_BLACK);
-				return selected;
-			} else {
-				Serial.println("Número inválido, intenta otra vez.");
-			}
-		}
-	}
-}
+////////////////////////////////////////////////////////////////////////////
 
 void setup() {
 
 	Serial.begin(115200);
-
 	platform.init();
+	inicializarKeypadTimers();
 
-	// Carga del ROM
-	int romIndex = selectROMSerial();
-	String romPath = "/" + romLoader.roms[romIndex];
-
-	try {
-		romLoader.loadROM(romPath, memory.getFirstPosition());
-	} catch (String error) {
-		Serial.println(error);
-	}
-
-	// Inicializacion de timers
-
-	CPUFreq = timerBegin(1000000); // 1000 Hz
-	timerAttachInterrupt(CPUFreq, &CPUCycle);
-	timerAlarm(CPUFreq, 1666, true, 0);
-
-	CH8TimersFreq = timerBegin(1000000); // 1000 Hz
-	timerAttachInterrupt(CH8TimersFreq, &CPUTimers);
-	timerAlarm(CH8TimersFreq, 16666, true, 0);
-
-	timerStart(CPUFreq);
-	timerStart(CH8TimersFreq);
+	drawROMMenuTFT(highlightIndex);
 }
 
 void loop() {
 
-	if (cpuTick) {
-		cpu.clockCycle();
-		cpuTick = false;
+    if(scanKeypadFlag && debouncerFlag){
+        scanKeypadFlag = false;
+        debouncerFlag = false; // reiniciamos debounce
+        scanKeypad();
+    }
+
+	if(!romSelected){
+		selectROM();
+		return;
 	}
 
-	if (ch8timersTick) {
-		cpu.updateTimers();
+	if(!chip8running){
+		String romPath = "/" + romLoader.roms[highlightIndex];
+		romLoader.loadROM(romPath, memory.getFirstPosition());
+		chip8running = true;
+		inicializarCHIP8Timers();
+	}
+
+
+	if (updateTFTScreenFlag) {
+		updateTFTScreenFlag = false;
+		chip8.updateTimers();
 		platform.UpdateScreen(display.getBuffer());
-		ch8timersTick = false;
 	}
 
-	if (kpd.getKeys()) {
-		for (int i = 0; i < LIST_MAX; i++) // Scan the whole key list.
-		{
-			if (kpd.key[i].stateChanged) // Only find keys that have changed state.
-			{
-				switch (kpd.key[i].kstate) { // Report active key state : IDLE, PRESSED, HOLD, or RELEASED
+	if(chip8ClockCycleFlag){
+		chip8ClockCycleFlag = false;
+		chip8.clockCycle();
+	}
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////
+
+// Definiciones de funciones
+
+void IRAM_ATTR CHIP8ClockCycle() {
+	chip8ClockCycleFlag = true;
+}
+
+void IRAM_ATTR CHIP8UpdateTimers() {
+	updateTFTScreenFlag = true;
+}
+
+void IRAM_ATTR keypadScanInterrupt() {
+
+		debouncerFlag = false;
+		scanKeypadFlag = true;
+		timerStop(keypadScanTimer);
+		timerStart(keypadDebounceTimer);
+	
+
+}
+
+void IRAM_ATTR debounceTimerISR() {
+	debouncerFlag = true;
+	timerStop(keypadDebounceTimer);
+	timerStart(keypadScanTimer);
+}
+
+void inicializarCHIP8Timers() {
+	chip8ClockTimer = timerBegin(1000000);
+	timerAttachInterrupt(chip8ClockTimer, &CHIP8ClockCycle);
+	timerAlarm(chip8ClockTimer, 1666, true, 0);
+
+	chip8DelaySoundTimer = timerBegin(1000000);
+	timerAttachInterrupt(chip8DelaySoundTimer, &CHIP8UpdateTimers);
+	timerAlarm(chip8DelaySoundTimer, 16666, true, 0);
+
+	timerStart(chip8ClockTimer);
+	timerStart(chip8DelaySoundTimer);
+}
+
+void inicializarKeypadTimers() {
+	keypadScanTimer = timerBegin(1000000);
+	timerAttachInterrupt(keypadScanTimer, &keypadScanInterrupt);
+	timerAlarm(keypadScanTimer, 1000, true, 0);
+	timerStart(keypadScanTimer);
+
+	keypadDebounceTimer = timerBegin(1000000);
+	timerAttachInterrupt(keypadDebounceTimer, &debounceTimerISR);
+	timerAlarm(keypadDebounceTimer, 1000, true, 0);
+	timerStop(keypadDebounceTimer);
+}
+
+void scanKeypad(){
+		if (kpd.getKeys()) {
+		for (int i = 0; i < LIST_MAX; i++) {
+			if (kpd.key[i].stateChanged) {
+				switch (kpd.key[i].kstate) {
 					case PRESSED:
 					case HOLD:
 						keypad.setKey(kpd.key[i].kchar, true);
@@ -156,5 +181,39 @@ void loop() {
 				}
 			}
 		}
+	}
+}
+
+void drawROMMenuTFT(int highlightIndex) {
+	tft.fillScreen(ST77XX_BLACK);
+	tft.setTextSize(1);
+
+	for (int i = 0; i < romLoader.romCount; i++) {
+		if (i == highlightIndex) {
+			tft.setTextColor(ST77XX_RED);
+		} else {
+			tft.setTextColor(ST77XX_YELLOW);
+		}
+		tft.setCursor(0, i * 16); // ajusta la altura según textSize
+		tft.printf("%d-%s\n", i, romLoader.roms[i].c_str());
+	}
+}
+
+void selectROM() {
+	if (keypad.isKeyPressed(0x8)) {
+		highlightIndex = (highlightIndex + 1) % romLoader.romCount;
+		drawROMMenuTFT(highlightIndex);
+		// delay(150); // debounce
+	}
+	if (keypad.isKeyPressed(0x2)) {
+		highlightIndex--;
+		if (highlightIndex < 0)
+			highlightIndex = romLoader.romCount - 1;
+		drawROMMenuTFT(highlightIndex);
+		// delay(150);
+	}
+	if (keypad.isKeyPressed(0x5)) {
+		romSelected = true;
+		tft.fillScreen(ST77XX_BLACK);
 	}
 }

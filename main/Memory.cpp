@@ -1,4 +1,4 @@
-#include "../headers/Memory.h"
+#include "headers/Memory.h"
 
 Memory::Memory() {}
 Memory::~Memory() {}
@@ -24,5 +24,5 @@ uint8_t Memory::read(uint16_t address) {
 }
 
 uint8_t *Memory::getFirstPosition() {
-	return &memoryArray[0];
+	return memoryArray;
 }
