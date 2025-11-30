@@ -18,6 +18,7 @@ void CPU::init() {
 	for (int i = 0; i < sizeof(regV); i++) {
 		regV[i] = 0;
 	}
+	display.clearBuffer();
 }
 
 void CPU::clockCycle() {
