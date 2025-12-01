@@ -9,17 +9,17 @@ ROMLoader::ROMLoader() {
 	loadROMList();
 }
 
-void ROMLoader::loadROM(String &romPath, uint8_t *mem) {
+bool ROMLoader::loadROM(String &romPath, uint8_t *mem) {
 
 	if (!LittleFS.begin(true)) {
 		Serial.println("Error montando LittleFS");
-		return;
+		return false;
 	}
 
 	File archivo = LittleFS.open(romPath.c_str(), "r");
 	if (!archivo) {
 		throw String("No se pudo abrir el archivo rom correctamente");
-		return;
+		return false;
 	}
 
 	uint16_t addr = 0x200;
@@ -31,6 +31,8 @@ void ROMLoader::loadROM(String &romPath, uint8_t *mem) {
 	}
 
 	archivo.close();
+
+	return true;
 }
 
 void ROMLoader::loadROMList() {

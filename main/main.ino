@@ -47,7 +47,7 @@ volatile bool updateTFTScreenFlag = false;
 volatile bool chip8ClockCycleFlag = false;
 
 volatile bool romSelected = false;
-volatile int highlightIndex = 0; 
+volatile int highlightIndex = 0;
 
 volatile bool chip8running = false;
 
@@ -79,7 +79,7 @@ void loop() {
 	bool scanned = scanKeypad();
 
 	if (!romSelected) {
-		if(scanned){
+		if (scanned) {
 			selectROM();
 		}
 		return;
@@ -87,7 +87,10 @@ void loop() {
 
 	if (!chip8running) {
 		String romPath = "/" + romLoader.roms[highlightIndex];
-		romLoader.loadROM(romPath, memory.getFirstPosition());
+		bool loaded = romLoader.loadROM(romPath, memory.getFirstPosition());
+		if (!loaded) {
+			return;
+		}
 		chip8running = true;
 		chip8.init();
 
@@ -111,7 +114,7 @@ void loop() {
 
 ////////////////////////////////////////////////////////////////////////////
 
-/*	ISRs  */ 
+/*	ISRs  */
 
 void IRAM_ATTR CHIP8ClockCycle() {
 	chip8ClockCycleFlag = true;
@@ -152,13 +155,11 @@ bool scanKeypad() {
 			}
 		}
 
-
-	if(keypad.isKeyPressed(0xF)){
-		stopAndExit();
-	}
+		if (keypad.isKeyPressed(0xF)) {
+			stopAndExit();
+		}
 		return true;
-	}
-	else{
+	} else {
 		return false;
 	}
 }
@@ -186,7 +187,7 @@ void selectROM() {
 	if (keypad.isKeyPressed(0x2)) {
 		highlightIndex--;
 		if (highlightIndex < 0)
-		highlightIndex = romLoader.romCount - 1;
+			highlightIndex = romLoader.romCount - 1;
 		drawROMMenuTFT(highlightIndex);
 	}
 	if (keypad.isKeyPressed(0x5)) {

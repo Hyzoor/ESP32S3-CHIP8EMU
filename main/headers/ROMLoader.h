@@ -6,7 +6,7 @@ class ROMLoader {
 
   public:
 	ROMLoader();
-	void loadROM(String &romPath, uint8_t *mem);
+	bool loadROM(String &romPath, uint8_t *mem);
 	void loadROMList();
 	String roms[20]; // máximo 20 ROMs
 	int romCount = 0;
