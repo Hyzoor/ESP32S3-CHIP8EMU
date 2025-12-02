@@ -88,9 +88,6 @@ void loop() {
 	if (!chip8running) {
 		String romPath = "/" + romLoader.roms[highlightIndex];
 		bool loaded = romLoader.loadROM(romPath, memory.getFirstPosition());
-		if (!loaded) {
-			return;
-		}
 		chip8running = true;
 		chip8.init();
 
@@ -100,16 +97,25 @@ void loop() {
 		timerStart(chip8DelaySoundTimer);
 	}
 
+
+	if (keypad.isKeyPressed(0xF)) {
+		stopAndExit();
+		return;
+	}
+
+
+	if (chip8ClockCycleFlag) {
+		chip8ClockCycleFlag = false;
+		chip8.clockCycle();
+	}
+	
 	if (updateTFTScreenFlag) {
 		updateTFTScreenFlag = false;
 		chip8.updateTimers();
 		platform.UpdateScreen(display.getBuffer());
 	}
 
-	if (chip8ClockCycleFlag) {
-		chip8ClockCycleFlag = false;
-		chip8.clockCycle();
-	}
+
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -155,9 +161,7 @@ bool scanKeypad() {
 			}
 		}
 
-		if (keypad.isKeyPressed(0xF)) {
-			stopAndExit();
-		}
+
 		return true;
 	} else {
 		return false;
