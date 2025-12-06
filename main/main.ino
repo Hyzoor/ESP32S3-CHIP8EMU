@@ -56,7 +56,6 @@ void inicializarCHIP8Timers();
 void IRAM_ATTR CHIP8ClockCycle();
 void IRAM_ATTR CHIP8UpdateTimers();
 
-void keypadEvent();
 bool scanKeypad();
 void drawROMMenuTFT(int);
 void selectROM();
@@ -97,25 +96,21 @@ void loop() {
 		timerStart(chip8DelaySoundTimer);
 	}
 
-
 	if (keypad.isKeyPressed(0xF)) {
 		stopAndExit();
 		return;
 	}
 
-
 	if (chip8ClockCycleFlag) {
 		chip8ClockCycleFlag = false;
 		chip8.clockCycle();
 	}
-	
+
 	if (updateTFTScreenFlag) {
 		updateTFTScreenFlag = false;
 		chip8.updateTimers();
 		platform.UpdateScreen(display.getBuffer());
 	}
-
-
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -160,7 +155,6 @@ bool scanKeypad() {
 				}
 			}
 		}
-
 
 		return true;
 	} else {
